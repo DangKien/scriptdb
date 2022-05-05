@@ -3,6 +3,7 @@
 const { spawn } = require("child_process");
 const path = require("path");
 const cron = require("node-cron");
+const dotenv = require("dotenv").config();
 
 /*
 Basic mongo dump and restore commands, they contain more options you can have a look at man page for both of them.
@@ -15,7 +16,11 @@ Using mongorestore - without any args:
   will try to restore every database from "dump" folder in current directory, if "dump" folder does not exist then it will simply fail.
 */
 
-const ARCHIVE_PATH = path.join(__dirname, "public", `${DB_NAME}.gzip`);
+const ARCHIVE_PATH = path.join(
+  __dirname,
+  "public",
+  `${process.env.DB_NAME || "dev.maedaexpress.com"}.gzip`
+);
 
 // 1. Cron expression for every 5 seconds - */5 * * * * *
 // 2. Cron expression for every night at 00:00 hours (0 0 * * * )
@@ -26,7 +31,7 @@ cron.schedule("*/5 * * * * *", () => backupMongoDB());
 
 function backupMongoDB() {
   const child = spawn("mongodump", [
-    `--uri=${DB_URI}`,
+    `--uri=${process.env.DB_URI}`,
     `--archive=${ARCHIVE_PATH}`,
     "--gzip",
     "--forceTableScan",
