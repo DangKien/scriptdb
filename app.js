@@ -17,49 +17,49 @@ Using mongodump - without any args:
 Using mongorestore - without any args:
   will try to restore every database from "dump" folder in current directory, if "dump" folder does not exist then it will simply fail.
 */
-const DB_NAME = "t_shirt";
 const date = new Date();
+
+// Database name
+const DB_NAME = process.env.DB_NAME;
+// File name backup
 const fileName = `${DB_NAME}-${date.getFullYear()}-${
   date.getMonth() + 1
 }-${date.getDay()}T${date.getHours()}.${date.getMinutes()}.${date.getSeconds()}Z`;
 
+// Arichive path
 const ARCHIVE_PATH = path.join(__dirname, "public", `${fileName}.gzip`);
+// Store orcle link
 const STORE_ORACLE = process.env.STORE_ORACLE;
-console.log("🚀 ~ STORE_ORACLE", STORE_ORACLE);
-
-// const ARCHIVE_PATH = path.join(
-//   __dirname,
-//   "public",
-//   `${process.env.DB_NAME || "dev.maedaexpress.com"}.gzip`
-// );
 
 // 1. Cron expression for every 5 seconds - */5 * * * * *
 // 2. Cron expression for every night at 00:00 hours (0 0 * * * )
 // Note: 2nd expression only contains 5 fields, since seconds is not necessary
 
 // Scheduling the backup every 5 seconds (using node-cron)
-cron.schedule("*/200 * * * * *", () => backupMongoDB());
+cron.schedule("*/5 * * * * *", () => backupMongoDB());
 
 function backupMongoDB() {
-  // const child = spawn("mongodump", [
-  //   `--uri=${process.env.DB_URI}`,
-  //   `--archive=${ARCHIVE_PATH}`,
-  //   "--gzip",
-  //   "--forceTableScan",
-  // ]);
-
   const child = spawn("mongodump", [
-    `--db=${DB_NAME}`,
+    `--uri=${process.env.DB_URI}`,
     `--archive=${ARCHIVE_PATH}`,
     "--gzip",
     "--forceTableScan",
   ]);
 
+  // const child = spawn("mongodump", [
+  //   `--db=${DB_NAME}`,
+  //   `--archive=${ARCHIVE_PATH}`,
+  //   "--gzip",
+  //   "--forceTableScan",
+  // ]);
+
   child.stdout.on("data", (data) => {
     console.log("stdout:\n", data);
   });
+
   child.stderr.on("data", (data) => {
     const fileContent = Buffer.from(data, "binary");
+    console.log("🚀 ~ fileContent", fileContent);
     request(
       {
         url: `${STORE_ORACLE}${fileName}`,
@@ -70,23 +70,20 @@ function backupMongoDB() {
         encoding: null,
         body: fs.createReadStream(ARCHIVE_PATH),
       },
-      (error, response, body) => {
-        if (error) {
-          console.log("error", error);
-        } else {
-          console.log("res", response.body.toString());
-        }
-      }
+      (error, response, body) => {}
     );
   });
+
   child.on("error", (error) => {
     console.log("error:\n", error);
   });
+
   child.on("exit", (code, signal) => {
     if (code) console.log("Process exit with code:", code);
     else if (signal) console.log("Process killed with signal:", signal);
     else {
       console.log("Backup is successfull ✅");
+      fs.unlinkSync(ARCHIVE_PATH);
     }
   });
 }
