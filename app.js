@@ -17,6 +17,7 @@ Using mongodump - without any args:
 Using mongorestore - without any args:
   will try to restore every database from "dump" folder in current directory, if "dump" folder does not exist then it will simply fail.
 */
+
 const date = new Date();
 
 // Database name
@@ -26,9 +27,9 @@ const fileName = `${DB_NAME}-${date.getFullYear()}-${
   date.getMonth() + 1
 }-${date.getDay()}T${date.getHours()}.${date.getMinutes()}.${date.getSeconds()}Z`;
 
-// Arichive path
+// Archive path
 const ARCHIVE_PATH = path.join(__dirname, "public", `${fileName}.gzip`);
-// Store orcle link
+// Store oracle link
 const STORE_ORACLE = process.env.STORE_ORACLE;
 
 // 1. Cron expression for every 5 seconds - */5 * * * * *
@@ -36,54 +37,50 @@ const STORE_ORACLE = process.env.STORE_ORACLE;
 // Note: 2nd expression only contains 5 fields, since seconds is not necessary
 
 // Scheduling the backup every 5 seconds (using node-cron)
-cron.schedule("*/5 * * * * *", () => backupMongoDB());
+cron.schedule("0 0 */2 * * *", () => backupMongoDB());
 
 function backupMongoDB() {
-  const child = spawn("mongodump", [
-    `--uri=${process.env.DB_URI}`,
-    `--archive=${ARCHIVE_PATH}`,
-    "--gzip",
-    "--forceTableScan",
-  ]);
+  try {
+    const child = spawn("mongodump", [
+      `--uri=${process.env.DB_URI}`,
+      `--archive=${ARCHIVE_PATH}`,
+      "--gzip",
+      "--forceTableScan",
+    ]);
 
-  // const child = spawn("mongodump", [
-  //   `--db=${DB_NAME}`,
-  //   `--archive=${ARCHIVE_PATH}`,
-  //   "--gzip",
-  //   "--forceTableScan",
-  // ]);
+    child.stdout.on("data", (data) => {
+      console.log("stdout:\n", data);
+    });
 
-  child.stdout.on("data", (data) => {
-    console.log("stdout:\n", data);
-  });
-
-  child.stderr.on("data", (data) => {
-    const fileContent = Buffer.from(data, "binary");
-    console.log("🚀 ~ fileContent", fileContent);
-    request(
-      {
-        url: `${STORE_ORACLE}${fileName}`,
-        method: "PUT",
-        headers: {
-          "cache-control": "no-cache",
+    child.stderr.on("data", (data) => {
+      const fileContent = Buffer.from(data, "binary");
+      request(
+        {
+          url: `${STORE_ORACLE}${fileName}`,
+          method: "PUT",
+          headers: {
+            "cache-control": "no-cache",
+          },
+          encoding: null,
+          body: fs.createReadStream(ARCHIVE_PATH),
         },
-        encoding: null,
-        body: fs.createReadStream(ARCHIVE_PATH),
-      },
-      (error, response, body) => {}
-    );
-  });
+        (error, response, body) => {}
+      );
+    });
 
-  child.on("error", (error) => {
-    console.log("error:\n", error);
-  });
+    child.on("error", (error) => {
+      console.log("error:\n", error);
+    });
 
-  child.on("exit", (code, signal) => {
-    if (code) console.log("Process exit with code:", code);
-    else if (signal) console.log("Process killed with signal:", signal);
-    else {
-      console.log("Backup is successfull ✅");
-      fs.unlinkSync(ARCHIVE_PATH);
-    }
-  });
+    child.on("exit", (code, signal) => {
+      if (code) console.log("Process exit with code:", code);
+      else if (signal) console.log("Process killed with signal:", signal);
+      else {
+        fs.unlinkSync(ARCHIVE_PATH);
+        console.log("Backup is successfully ✅");
+      }
+    });
+  } catch (error) {
+    console.log(error);
+  }
 }
