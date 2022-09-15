@@ -12,18 +12,14 @@ const DB_NAME = process.env.DB_NAME;
 const STORE_ORACLE = process.env.STORE_ORACLE;
 //Uri
 const DB_URI = process.env.MONGODB_URI;
-// 1. Cron expression for every 5 seconds - */5 * * * * *
-// 2. Cron expression for every night at 00:00 hours (0 0 * * * )
 
 // Scheduling the backup every 5 seconds (using node-cron)
 try {
   cron.schedule("0 0 */2 * * *", () => {
     const date = new Date();
-    // File name backup
     const fileName = `${DB_NAME}-${date.getFullYear()}-${
       date.getMonth() + 1
     }-${date.getDate()}T${date.getHours()}.${date.getMinutes()}.${date.getSeconds()}Z`;
-
     backupMongoDB(fileName);
   });
 } catch (error) {
@@ -32,28 +28,22 @@ try {
 
 function backupMongoDB(fileName) {
   try {
-    // Archive path
     const ARCHIVE_PATH = path.join(__dirname, "public", `${fileName}.gzip`);
-
     const child = spawn("mongodump", [
       `--uri="${DB_URI}"`,
       `--archive=${ARCHIVE_PATH}`,
       "--gzip",
       "--forceTableScan",
     ]);
-
     child.stdout.on("data", (data) => {
       console.log("stdout:\n", data);
     });
-
     child.stderr.on("data", (data) => {
       console.log("stderr:\n", Buffer.from(data).toString());
     });
-
     child.on("error", (error) => {
       console.log("error:\n", error);
     });
-
     child.on("exit", (code, signal) => {
       if (code) console.log("Process exit with code:", code);
       else if (signal) console.log("Process killed with signal:", signal);
